@@ -17,12 +17,18 @@ on the wheel.
 | 3 | `lessons/03_human_in_the_loop.py` | The approval-gate pattern: agent proposes, you approve/deny/edit |
 | 4 | `lessons/04_multi_agent_orchestration.py` | **Multiple agents** working together: planner → workers → reviewer |
 
-Then the capstone:
+Then the capstones:
 
 - `app/task_assistant.py` — an interactive **multi-agent daily-task assistant**.
   You give it a goal; a *planner* agent proposes tasks (you approve/edit),
   *worker* agents draft each one (you approve, optionally save), and a
   *reviewer* agent wraps up. Multiple agents, human-in-the-loop throughout.
+- `app/job_hunter.py` — a **web-search job hunter**. A *scout* agent searches
+  the live web for openings (full-time / part-time / remote), *matcher* agents
+  score each one against your skill set (APPLY/MAYBE/SKIP), a *ranker* agent
+  shortlists the best, and a *writer* agent drafts tailored cover letters for
+  the top picks — you approve every step. Reads your skill profile from
+  `workspace/output/resume-and-cover-letter.md` when present.
 
 ## Prerequisites
 
@@ -53,6 +59,7 @@ python lessons/03_human_in_the_loop.py
 python lessons/04_multi_agent_orchestration.py
 
 python app/task_assistant.py
+python app/job_hunter.py
 ```
 
 Each script prints what it's *about* to do and waits for your `y`/`n`.
@@ -134,7 +141,9 @@ cursor-agent-lab/
 │  ├─ 02_streaming_followup.py
 │  ├─ 03_human_in_the_loop.py
 │  └─ 04_multi_agent_orchestration.py
-├─ app/task_assistant.py     # multi-agent capstone
+├─ app/
+│  ├─ task_assistant.py      # multi-agent capstone (planner/worker/reviewer)
+│  └─ job_hunter.py          # web-search scout -> matchers -> ranker -> cover letters
 └─ workspace/                # sandbox the agents run against (gitignored output)
 ```
 

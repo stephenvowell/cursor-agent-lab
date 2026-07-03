@@ -4,3 +4,9 @@ cursor-sdk
 
 # Loads CURSOR_API_KEY from a local .env file (convenience).
 python-dotenv
+
+# Gmail API (app/job_email_checker.py) — read your inbox via Google's API.
+# https://developers.google.com/gmail/api/quickstart/python
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
