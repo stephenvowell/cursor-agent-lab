@@ -116,3 +116,8 @@ cursor-agent-lab/
 ├─ app/task_assistant.py     # multi-agent capstone
 └─ workspace/                # sandbox the agents run against (gitignored output)
 ```
+
+## Author & license
+
+Built by **Stephen Vowell** ([github.com/stephenvowell](https://github.com/stephenvowell)).
+Licensed under the [MIT License](LICENSE).
