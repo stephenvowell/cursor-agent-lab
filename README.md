@@ -58,6 +58,19 @@ python app/task_assistant.py
 Each script prints what it's *about* to do and waits for your `y`/`n`.
 Answer `n` and nothing is sent.
 
+### Try it with no API key: demo mode
+
+Add `--demo` (or set `CURSOR_LAB_DEMO=1`) to run any lesson or the app with
+**fake agents** — same interaction, approval gates, and file output, but no key
+and no cost. Great for seeing the flow before you wire up a real key.
+
+```powershell
+python app/task_assistant.py --demo
+python lessons/04_multi_agent_orchestration.py --demo
+```
+
+The banner shows `[DEMO]` so you always know which mode you're in.
+
 ## The "not autonomous" design
 
 - **`approve()` gates every send.** The agents never act until you say yes.

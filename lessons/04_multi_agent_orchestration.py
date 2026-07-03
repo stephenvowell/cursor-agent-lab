@@ -26,17 +26,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared import (  # noqa: E402
     MODEL,
     WORKSPACE,
+    FakeAgent,
     approve,
     ask_text,
     banner,
+    demo_enabled,
     require_api_key,
 )
 
 from cursor_sdk import Agent, CursorAgentError, LocalAgentOptions  # noqa: E402
 
+DEMO = demo_enabled()
+
 
 def new_agent(api_key: str):
-    """Spin up a fresh, disposable local agent."""
+    """Spin up a fresh, disposable local agent (or a fake one in demo mode)."""
+    if DEMO:
+        return FakeAgent()
     return Agent.create(
         model=MODEL,
         api_key=api_key,
@@ -56,8 +62,9 @@ def parse_tasks(text: str) -> list[str]:
 
 
 def main() -> None:
-    banner("Lesson 4: multi-agent orchestration  (planner -> workers -> reviewer)")
-    api_key = require_api_key()
+    banner("Lesson 4: multi-agent orchestration  (planner -> workers -> reviewer)"
+           + ("  [DEMO]" if DEMO else ""))
+    api_key = "demo" if DEMO else require_api_key()
 
     goal = ask_text("Goal for the agents to tackle?\n> ")
     if not goal:

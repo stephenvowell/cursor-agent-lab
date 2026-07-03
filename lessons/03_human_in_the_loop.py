@@ -20,9 +20,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared import (  # noqa: E402
     MODEL,
     WORKSPACE,
+    FakeAgent,
     approve,
     ask_text,
     banner,
+    demo_enabled,
     require_api_key,
     save_output,
 )
@@ -31,20 +33,23 @@ from cursor_sdk import Agent, CursorAgentError, LocalAgentOptions  # noqa: E402
 
 
 def main() -> None:
-    banner("Lesson 3: human-in-the-loop  (propose -> you decide)")
-    api_key = require_api_key()
+    demo = demo_enabled()
+    banner("Lesson 3: human-in-the-loop  (propose -> you decide)" + ("  [DEMO]" if demo else ""))
+    api_key = "demo" if demo else require_api_key()
 
     goal = ask_text("What should we plan? (e.g. 'tidy my desk and inbox')\n> ")
     if not goal:
         goal = "spend 30 focused minutes learning the Cursor SDK"
         print(f"(using default goal: {goal})")
 
+    agent_cm = FakeAgent() if demo else Agent.create(
+        model=MODEL,
+        api_key=api_key,
+        local=LocalAgentOptions(cwd=str(WORKSPACE)),
+    )
+
     try:
-        with Agent.create(
-            model=MODEL,
-            api_key=api_key,
-            local=LocalAgentOptions(cwd=str(WORKSPACE)),
-        ) as agent:
+        with agent_cm as agent:
             plan = ""
             # Loop: propose -> review -> (approve | revise | quit)
             while True:

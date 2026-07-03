@@ -23,17 +23,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared import (  # noqa: E402
     MODEL,
     WORKSPACE,
+    FakeAgent,
     approve,
     ask_text,
     banner,
+    demo_enabled,
     require_api_key,
     save_output,
 )
 
 from cursor_sdk import Agent, CursorAgentError, LocalAgentOptions  # noqa: E402
 
+DEMO = demo_enabled()
+
 
 def new_agent(api_key: str):
+    if DEMO:
+        return FakeAgent()
     return Agent.create(
         model=MODEL,
         api_key=api_key,
@@ -121,9 +127,9 @@ def review_stage(api_key: str, done: list[tuple[str, str]]) -> None:
 
 
 def main() -> None:
-    banner("Multi-agent Daily Task Assistant")
+    banner("Multi-agent Daily Task Assistant" + ("  [DEMO]" if DEMO else ""))
     print("Planner -> Workers -> Reviewer. You approve every step.\n")
-    api_key = require_api_key()
+    api_key = "demo" if DEMO else require_api_key()
 
     goal = ask_text("What do you want to get done today?\n> ")
     if not goal:

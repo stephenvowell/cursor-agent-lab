@@ -103,3 +103,84 @@ def save_output(name: str, text: str) -> Path:
     path = OUTPUT_DIR / name
     path.write_text(text, encoding="utf-8")
     return path
+
+
+# --- Demo mode (offline, no API key, no cost) ------------------------------
+# Pass `--demo` on the command line (or set CURSOR_LAB_DEMO=1) and the lessons
+# use these stand-ins instead of real Cursor agents. They mimic just enough of
+# the SDK's shape (send -> run, run.text(), run.messages(), run.wait()) that the
+# lesson code stays identical between demo and real runs.
+
+import time as _time  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+
+def demo_enabled() -> bool:
+    if "--demo" in sys.argv:
+        return True
+    return os.environ.get("CURSOR_LAB_DEMO", "").strip().lower() in ("1", "true", "yes")
+
+
+def _canned_reply(prompt: str) -> str:
+    """Pick a plausible fake answer based on the role implied by the prompt."""
+    p = prompt.lower()
+    if any(k in p for k in ("numbered list", "task list", "into tasks",
+                            "small, independent", "realistic task")):
+        return "1. Outline the key points\n2. Write a first draft\n3. Review and polish"
+    if any(k in p for k in ("reviewer", "feedback", "summarize", "verdict", "end-of-day")):
+        return (
+            "- Clear intent and a sensible structure\n"
+            "- Tighten the wording in a couple of places\n"
+            "- Add one concrete example\n"
+            "Overall: a strong start, ready to refine."
+        )
+    return (
+        "[demo draft] A concise, ready-to-use draft would appear here. "
+        "Add your CURSOR_API_KEY and drop --demo for real agent output."
+    )
+
+
+class _FakeRun:
+    def __init__(self, text: str):
+        self.run_id = "demo-run"
+        self._text = text
+
+    def text(self) -> str:
+        return self._text
+
+    def wait(self):
+        return SimpleNamespace(status="finished", result=self._text, id=self.run_id)
+
+    def messages(self):
+        # Simulate streaming by emitting the reply a line at a time.
+        for piece in self._text.splitlines(keepends=True):
+            _time.sleep(0.03)
+            block = SimpleNamespace(type="text", text=piece)
+            yield SimpleNamespace(type="assistant",
+                                  message=SimpleNamespace(content=[block]))
+
+    stream = messages
+
+
+class FakeAgent:
+    """Offline stand-in that quacks like an SDK agent (context-manager + send)."""
+
+    def __init__(self):
+        self.agent_id = "demo-agent"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def send(self, prompt: str) -> "_FakeRun":
+        return _FakeRun(_canned_reply(prompt))
+
+    def close(self):
+        pass
+
+
+def demo_prompt(message: str):
+    """Offline stand-in for Agent.prompt: returns a result-like object."""
+    return SimpleNamespace(status="finished", result=_canned_reply(message), id="demo-run")
