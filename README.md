@@ -79,6 +79,15 @@ The banner shows `[DEMO]` so you always know which mode you're in.
 - **Drafts, not actions.** The task assistant produces text you review;
   saving output is a separate, explicit approval.
 
+## Windows note
+
+`cursor-sdk` 0.1.8's *sync* local runtime has a Windows-only bug: it reads the
+bridge's stderr pipe with `select()`, which on Windows only supports sockets
+(WinError 10038). `shared/__init__.py` applies a small, automatic shim (a
+thread-based reader) so local agents start normally on Windows. It's a no-op on
+macOS/Linux and on the async runtime. Nothing for you to do - just know that's
+why the shim exists.
+
 ## Key SDK concepts (cheat sheet)
 
 - `Agent.prompt(prompt, options)` — one-shot; sends, waits, disposes itself.

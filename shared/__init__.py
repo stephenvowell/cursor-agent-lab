@@ -184,3 +184,65 @@ class FakeAgent:
 def demo_prompt(message: str):
     """Offline stand-in for Agent.prompt: returns a result-like object."""
     return SimpleNamespace(status="finished", result=_canned_reply(message), id="demo-run")
+
+
+# --- Windows compatibility shim --------------------------------------------
+# cursor-sdk 0.1.8's *sync* local bridge reads the bridge subprocess's stderr
+# pipe with `select()`. On Windows `select()` only works on sockets, so it
+# raises WinError 10038 and no local agent can start. We swap in a small
+# thread-based reader that avoids `select`. (The async runtime is unaffected;
+# it already reads via asyncio streams.) No-op on macOS/Linux.
+
+def _patch_sync_bridge_for_windows() -> None:
+    if os.name != "nt":
+        return
+    try:
+        import threading
+        import time as _t
+
+        from cursor_sdk import _bridge as _b
+    except Exception:  # pragma: no cover - SDK not importable
+        return
+
+    if getattr(_b, "_read_discovery_patched", False):
+        return
+
+    def _read_discovery(process, timeout):
+        result: dict = {}
+        lines: list[str] = []
+
+        def reader():
+            try:
+                assert process.stderr is not None
+                for raw in process.stderr:  # blocking readline in a thread
+                    lines.append(raw)
+                    parsed = _b.parse_discovery_line(raw)
+                    if parsed is not None:
+                        result["discovery"] = parsed
+                        return
+            except Exception as exc:  # noqa: BLE001
+                result["error"] = exc
+
+        t = threading.Thread(target=reader, daemon=True)
+        t.start()
+        deadline = _t.monotonic() + timeout
+        while _t.monotonic() < deadline:
+            if "discovery" in result:
+                return result["discovery"]
+            if "error" in result:
+                raise _b.CursorSDKError(f"Bridge discovery read error: {result['error']}")
+            if process.poll() is not None and not t.is_alive():
+                if "discovery" in result:
+                    return result["discovery"]
+                raise _b.CursorSDKError(
+                    f"Bridge exited before discovery with status {process.returncode}: "
+                    + "".join(lines)
+                )
+            t.join(timeout=0.1)
+        raise _b.CursorSDKError("Timed out waiting for bridge discovery")
+
+    _b._read_discovery = _read_discovery
+    _b._read_discovery_patched = True
+
+
+_patch_sync_bridge_for_windows()
