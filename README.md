@@ -1,7 +1,31 @@
 # Cursor Agent Lab
 
-A hands-on, **you-stay-in-control** playground for learning the [Cursor SDK](https://cursor.com/docs/sdk/python) —
-how to run and coordinate **multiple Cursor agents** from your own Python code.
+> Production-minded patterns for building **multi-agent, human-in-the-loop** automations on the
+> [Cursor SDK](https://cursor.com/docs/sdk/python) — from first principles to a shippable desktop app.
+
+![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
+![Cursor SDK](https://img.shields.io/badge/Built%20with-Cursor%20SDK-0d1528)
+![License: MIT](https://img.shields.io/badge/License-MIT-3b82f6)
+![Human-in-the-loop](https://img.shields.io/badge/Design-Human--in--the--loop-4ade80)
+
+![Career Copilot — the capstone desktop app](assets/career-copilot-demo.png)
+
+*Career Copilot: one window that runs the toolkit's agents in an approval-gated, embedded console — no popup terminals. Styled to match [stephenv.net](https://stephenv.net).*
+
+## What this demonstrates
+
+A compact but complete showcase of the skills behind agent-driven workflow automation:
+
+- **Multi-agent orchestration** — planner → workers → reviewer, coordinated from plain Python.
+- **Human-in-the-loop control** — every agent action passes an `approve()` gate; nothing runs on its own.
+- **Productization** — turning agent workflows into a **desktop app a non-coder can use** (Tkinter, embedded console, live stdin/stdout streaming).
+- **Real integrations** — Gmail API, live web search, and **MCP** tool servers.
+- **Debugging the stack** — diagnosed and fixed a real **Cursor SDK crash on Windows** (root cause + shim documented [below](#known-sdk-issue-on-windows-diagnosed--fixed-here)).
+
+> Built by **Stephen Vowell** — available for AI-workflow automation & systems-integration work.
+> [github.com/stephenvowell](https://github.com/stephenvowell) · [stephenv.net](https://stephenv.net)
+
+## The core design: you stay in control
 
 Nothing here runs autonomously. Every agent action passes through an
 approval gate (`approve()` in `shared/`), so *you* decide what happens and
