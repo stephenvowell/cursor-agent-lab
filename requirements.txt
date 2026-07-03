@@ -1,0 +1,6 @@
+# Cursor SDK (public beta) — run Cursor agents from Python.
+# https://cursor.com/docs/sdk/python
+cursor-sdk
+
+# Loads CURSOR_API_KEY from a local .env file (convenience).
+python-dotenv
