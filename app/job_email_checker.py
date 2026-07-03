@@ -30,14 +30,26 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_DIR = PROJECT_ROOT / "workspace" / "output"
+def app_base_dir() -> Path:
+    """Where the tool keeps its files.
 
-# Secrets live at the project root and are git-ignored:
+    Packaged as a PyInstaller .exe, __file__ points inside a temp extraction
+    dir, so keep credentials, token, and summaries next to the executable.
+    Running from source, use the project root as before.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+BASE_DIR = app_base_dir()
+OUTPUT_DIR = BASE_DIR / "workspace" / "output"
+
+# Secrets live next to the tool and are git-ignored:
 #   credentials.json - the OAuth client you download from Google Cloud (once).
 #   token.json       - your saved login, created automatically on first --auth.
-CREDENTIALS_FILE = PROJECT_ROOT / "credentials.json"
-TOKEN_FILE = PROJECT_ROOT / "token.json"
+CREDENTIALS_FILE = BASE_DIR / "credentials.json"
+TOKEN_FILE = BASE_DIR / "token.json"
 
 # Read-only: the tool literally cannot modify your mailbox.
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -108,21 +120,29 @@ def get_service(interactive: bool):
             creds.refresh(Request())
         elif interactive:
             if not CREDENTIALS_FILE.exists():
+                relaunch = (
+                    "run this app again"
+                    if getattr(sys, "frozen", False)
+                    else "run:  python app/job_email_checker.py --auth"
+                )
                 die(
                     f"Can't find {CREDENTIALS_FILE.name}.\n"
-                    "Download your OAuth client from Google Cloud and save it as\n"
+                    "Download your OAuth client (Desktop app) from Google Cloud and "
+                    "save it as\n"
                     f"  {CREDENTIALS_FILE}\n"
-                    "then run:  python app/job_email_checker.py --auth"
+                    f"then {relaunch}."
                 )
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(CREDENTIALS_FILE), SCOPES
             )
             creds = flow.run_local_server(port=0)
         else:
-            die(
-                "Not authorized yet (no valid token.json). Run the one-time setup:\n"
-                "  python app/job_email_checker.py --auth"
+            setup = (
+                "run this app again to authorize"
+                if getattr(sys, "frozen", False)
+                else "run the one-time setup:\n  python app/job_email_checker.py --auth"
             )
+            die(f"Not authorized yet (no valid token.json). {setup}")
         TOKEN_FILE.write_text(creds.to_json(), encoding="utf-8")
 
     from googleapiclient.discovery import build
@@ -287,7 +307,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    service = get_service(interactive=args.auth)
+    # As a packaged app, the first double-click has no token yet - authorize
+    # automatically (opens a browser once) instead of failing with an error.
+    frozen = getattr(sys, "frozen", False)
+    interactive = args.auth or (frozen and not TOKEN_FILE.exists())
+
+    service = get_service(interactive=interactive)
 
     if args.auth:
         print("Authorized. token.json saved - future runs need no browser.\n")
@@ -307,4 +332,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # A double-clicked .exe closes instantly on exit; pause so the user can read
+    # the summary (or any setup message). No effect when run from source.
+    try:
+        main()
+    finally:
+        if getattr(sys, "frozen", False):
+            try:
+                input("\nPress Enter to close...")
+            except (EOFError, KeyboardInterrupt):
+                pass
