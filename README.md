@@ -79,14 +79,35 @@ The banner shows `[DEMO]` so you always know which mode you're in.
 - **Drafts, not actions.** The task assistant produces text you review;
   saving output is a separate, explicit approval.
 
-## Windows note
+## Known SDK issue on Windows (diagnosed + fixed here)
 
-`cursor-sdk` 0.1.8's *sync* local runtime has a Windows-only bug: it reads the
-bridge's stderr pipe with `select()`, which on Windows only supports sockets
-(WinError 10038). `shared/__init__.py` applies a small, automatic shim (a
-thread-based reader) so local agents start normally on Windows. It's a no-op on
-macOS/Linux and on the async runtime. Nothing for you to do - just know that's
-why the shim exists.
+`cursor-sdk` 0.1.8's **sync local runtime crashes on Windows** before an agent
+can start. This repo diagnoses the root cause and ships an automatic,
+zero-config workaround so every lesson runs on Windows out of the box.
+
+**Symptom**
+
+```
+OSError: [WinError 10038] An operation was attempted on something that is not a socket
+```
+
+**Root cause**
+
+The bridge-discovery step (`cursor_sdk/_bridge.py`) reads the agent subprocess's
+`stderr` pipe with `select.select()`. On Windows, `select()` only supports
+sockets — not file handles or pipes — so it raises `WinError 10038`. The SDK's
+**async** path works because it uses `asyncio` stream readers instead.
+
+**Fix (in `shared/__init__.py`)**
+
+At import time, `shared/` monkeypatches `_bridge._read_discovery` to read the
+discovery line on a background thread (blocking `readline` with a timeout)
+instead of `select()`. This mirrors what the async path already does. The shim
+is a **no-op on macOS/Linux and on the async runtime** — nothing for you to
+configure; it just makes the sync local runtime start normally on Windows.
+
+> Reported upstream to Cursor. Suggested upstream fix: on Windows, use a
+> thread-based stderr reader in `_read_discovery` rather than `select()`.
 
 ## Key SDK concepts (cheat sheet)
 
