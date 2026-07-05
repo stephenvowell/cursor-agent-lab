@@ -1,5 +1,7 @@
 # Career Copilot — product overview
 
+![Career Copilot — roles table, Job Scout + Hunter, yes/no workflow](../assets/career-copilot-demo.png)
+
 **Human-in-the-loop job search desk.** Scout live boards, score fit against *your* résumé, rank picks, draft cover letters — you only say **Yes** or **No**.
 
 Built by [Stephen Vowell](https://stephenv.net) · [GitHub](https://github.com/stephenvowell/cursor-agent-lab)

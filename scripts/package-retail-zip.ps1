@@ -16,8 +16,10 @@ New-Item -ItemType Directory -Path $Staging | Out-Null
 Copy-Item (Join-Path $Bin "CareerCopilot.exe") $Staging
 Copy-Item (Join-Path $Bin "pack") (Join-Path $Staging "pack") -Recurse
 Set-Content (Join-Path $Staging "career_copilot_root.txt") -Value (Join-Path $Staging "pack") -Encoding UTF8
-Copy-Item (Join-Path $Root "docs\PRODUCT.md") $Staging
 Copy-Item (Join-Path $Root "docs\PRIVACY.md") $Staging
+Copy-Item (Join-Path $Root "assets\career-copilot-demo.png") $Staging
+$product = (Get-Content (Join-Path $Root "docs\PRODUCT.md") -Raw) -replace '\.\./assets/career-copilot-demo\.png', 'career-copilot-demo.png'
+Set-Content (Join-Path $Staging "PRODUCT.md") -Value $product -Encoding UTF8
 
 if (Test-Path $Zip) { Remove-Item $Zip -Force }
 Compress-Archive -Path (Join-Path $Staging "*") -DestinationPath $Zip
