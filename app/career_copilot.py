@@ -324,7 +324,12 @@ class Copilot(tk.Tk):
 
 
 def main() -> None:
-    Copilot().mainloop()
+    app = Copilot()
+    if "--demo" in sys.argv:
+        app.demo.set(True)
+        extra: tuple[str, ...] = ("--unattended",) if "--unattended" in sys.argv else ()
+        app.after(600, lambda: app._start_tool("job_hunter.py", True, extra))
+    app.mainloop()
 
 
 if __name__ == "__main__":
