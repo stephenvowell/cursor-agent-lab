@@ -7,6 +7,7 @@ Agents run against this folder. **Approved output** lands in `output/` (gitignor
 | `output/` | Job reports, cover letters, email summaries, resume copies |
 | `output/archive/` | Older runs — safe to delete if you need space |
 | `output/NEXT-STEPS.md` | **Start here** — today's apply list |
+| `output/scout-latest.json` | Roles table data for Career Copilot GUI |
 | `output/jobs-YYYY-MM-DD.md` | Job Scout report (live search + fit table) |
 | `output/job-opportunities-YYYY-MM-DD.md` | Full Job Hunter report (matches + rank) |
 | `output/job-email-summary-YYYY-MM-DD.md` | Latest morning Gmail scan |

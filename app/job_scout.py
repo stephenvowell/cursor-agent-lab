@@ -1,11 +1,8 @@
-"""Job Scout — scout prompt, parsing, and progress (used by Job Hunter).
-
-Merged from the standalone job-scout project: live web search using
-config/sources.yaml, markdown table output, heartbeat while the agent runs.
-"""
+"""Job Scout — scout prompt, parsing, validation, and progress (used by Job Hunter)."""
 
 from __future__ import annotations
 
+import json
 import re
 import threading
 from datetime import date
@@ -13,6 +10,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config" / "sources.yaml"
+SCOUT_JSON_NAME = "scout-latest.json"
+MIN_ROLES = 3
+MAX_SCOUT_RETRIES = 2
 
 DEFAULT_TYPES = "contract preferred; full-time, part-time, remote US"
 DEFAULT_FOCUS = (
@@ -28,9 +28,41 @@ def load_sources_config() -> str:
         return "# sources.yaml not found — search broadly for remote embedded/IoT roles\n"
 
 
-def build_scout_prompt(profile: str, types: str, focus: str) -> str:
+def _format_fetched_postings(postings: list[dict]) -> str:
+    if not postings:
+        return ""
+    blocks: list[str] = [
+        "## Verified seed postings (full descriptions fetched — score these first)\n"
+    ]
+    for i, post in enumerate(postings, start=1):
+        company = post.get("company") or "Unknown"
+        note = post.get("note") or ""
+        url = post.get("url") or ""
+        desc = post.get("description") or ""
+        blocks.append(f"### Seed {i}: {company} {note}".strip())
+        blocks.append(f"URL: {url}\n")
+        blocks.append(desc)
+        blocks.append("")
+    return "\n".join(blocks)
+
+
+def build_scout_prompt(
+    profile: str,
+    types: str,
+    focus: str,
+    *,
+    fetched_postings: list[dict] | None = None,
+) -> str:
     today = date.today().isoformat()
     config = load_sources_config()
+    seeds_block = _format_fetched_postings(fetched_postings or [])
+    seeds_instruction = (
+        "Include every seed posting above in your table (LinkedIn/Indeed seeds are search "
+        "pages — follow to individual job URLs). "
+        "Then add more roles from live web search if needed.\n"
+        if seeds_block
+        else "Prioritize LinkedIn Jobs and Indeed for US remote embedded/firmware roles.\n"
+    )
     return f"""You are Job Scout with LIVE WEB ACCESS. Use web search now.
 
 Today's date: {today}
@@ -43,12 +75,14 @@ Employment types: {types}
 Role focus / keywords: {focus}
 Location: Sierra Vista, AZ, USA — open to REMOTE US roles.
 
+{seeds_block}
+
 ## Sources and keywords (prioritize priority 1–3 boards)
 {config}
 
 ## Task
 1. Search the live web for current job postings matching the profile.
-2. Score each role 0–100 (honest gaps, do not inflate).
+2. {seeds_instruction}Score each role 0–100 (honest gaps, do not inflate).
 3. Return ONLY a markdown document with:
 
 # Job scout — {today}
@@ -74,6 +108,17 @@ N. Company | Role title | Type | Remote | URL | fit N/100
 """
 
 
+def build_scout_retry_prompt(previous: str) -> str:
+    return (
+        "Your previous reply was NOT a parseable markdown table with at least "
+        f"{MIN_ROLES} data rows.\n\n"
+        f"Previous reply:\n{previous[:2000]}\n\n"
+        "Try again. Return ONLY the markdown document. The table MUST have header:\n"
+        "| Rank | Fit | Company | Role | Type | Remote | URL | Matched | Gaps |\n"
+        "with numbered rank rows (1, 2, 3…) and real URLs."
+    )
+
+
 def parse_table_rows(text: str) -> list[str]:
     rows: list[str] = []
     for line in text.splitlines():
@@ -93,14 +138,42 @@ def parse_table_rows(text: str) -> list[str]:
         remote = cols[5]
         url = cols[6]
         fit = cols[1]
+        matched = cols[7] if len(cols) > 7 else ""
+        gaps = cols[8] if len(cols) > 8 else ""
         rows.append(
             f"{company} | {role} | {typ} | {remote} | {url} | fit {fit}/100"
+            + (f" | matched: {matched}" if matched else "")
+            + (f" | gaps: {gaps}" if gaps else "")
         )
     return rows
 
 
+def parse_table_to_roles(text: str) -> list[dict]:
+    roles: list[dict] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("|") or "---" in line:
+            continue
+        cols = [c.strip() for c in line.strip("|").split("|")]
+        if len(cols) < 7 or cols[0].lower() in ("rank", "#") or not cols[0].isdigit():
+            continue
+        roles.append(
+            {
+                "rank": int(cols[0]),
+                "fit": int(cols[1]) if cols[1].isdigit() else cols[1],
+                "company": cols[2],
+                "role": cols[3],
+                "type": cols[4],
+                "remote": cols[5],
+                "url": cols[6],
+                "matched": cols[7] if len(cols) > 7 else "",
+                "gaps": cols[8] if len(cols) > 8 else "",
+            }
+        )
+    return roles
+
+
 def parse_opportunities(text: str) -> list[str]:
-    """Parse scout output: markdown table first, then numbered lines."""
     from_table = parse_table_rows(text)
     if from_table:
         return from_table
@@ -114,8 +187,29 @@ def parse_opportunities(text: str) -> list[str]:
     return found
 
 
+def extract_url_from_opp(opp: str) -> str | None:
+    for part in opp.split("|"):
+        p = part.strip()
+        if p.lower().startswith("http://") or p.lower().startswith("https://"):
+            return p
+    m = re.search(r"https?://\S+", opp)
+    return m.group(0).rstrip(").,") if m else None
+
+
+def write_scout_json(text: str, output_dir: Path) -> Path:
+    """Write scout-latest.json and print GUI bridge line."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / SCOUT_JSON_NAME
+    payload = {
+        "date": date.today().isoformat(),
+        "roles": parse_table_to_roles(text),
+    }
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(f"@@SCOUT_JSON {path}", flush=True)
+    return path
+
+
 def send_with_progress(agent, prompt: str) -> str:
-    """Call agent.send and print heartbeat lines while waiting (1–3 min typical)."""
     stop = threading.Event()
 
     def heartbeat() -> None:
@@ -134,6 +228,22 @@ def send_with_progress(agent, prompt: str) -> str:
         return agent.send(prompt).text()
     finally:
         stop.set()
+
+
+def run_scout_agent(agent, prompt: str) -> str:
+    """Run scout with validate/retry until table parses or retries exhausted."""
+    result = send_with_progress(agent, prompt)
+    for attempt in range(MAX_SCOUT_RETRIES):
+        opps = parse_opportunities(result)
+        if len(opps) >= MIN_ROLES:
+            return result
+        print(
+            f"\n   Scout output had {len(opps)} parseable role(s); "
+            f"retrying ({attempt + 1}/{MAX_SCOUT_RETRIES})…",
+            flush=True,
+        )
+        result = send_with_progress(agent, build_scout_retry_prompt(result))
+    return result
 
 
 def demo_scout_markdown() -> str:

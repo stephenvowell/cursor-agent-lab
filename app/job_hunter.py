@@ -25,13 +25,17 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from demo_data import demo_cover_letter, demo_matcher_verdict, demo_ranking  # noqa: E402
+from fetchers import fetch_job_description, load_seed_postings  # noqa: E402
 from job_scout import (  # noqa: E402
     DEFAULT_FOCUS,
     DEFAULT_TYPES,
     build_scout_prompt,
     demo_scout_markdown,
+    extract_url_from_opp,
     parse_opportunities,
-    send_with_progress,
+    run_scout_agent,
+    write_scout_json,
 )
 from shared import (  # noqa: E402
     MODEL,
@@ -100,21 +104,33 @@ def load_profile() -> str:
 
 
 def scout_stage(api_key: str, profile: str, types: str, focus: str) -> list[str]:
-    """Job Scout — live web search; you approve before it runs."""
+    """Job Scout — fetch seeds, live search, validate table, emit JSON for GUI."""
     if not approve(
         "Send Job Scout to search live job boards (Interrupt, Arc, Wellfound, …)?",
         default_yes=True,
     ):
         print("Cancelled.")
         return []
-    prompt = build_scout_prompt(profile, types, focus)
+
+    fetched: list[dict] = []
+    if not DEMO:
+        print("Fetching seed URLs from config/seed_urls.yaml…", flush=True)
+        fetched = load_seed_postings(fetch_job_description)
+        for post in fetched:
+            label = post.get("company") or post.get("url", "")
+            ok = not str(post.get("description", "")).startswith("(fetch failed")
+            print(f"   {'OK' if ok else 'FAIL'}: {label}", flush=True)
+
+    prompt = build_scout_prompt(profile, types, focus, fetched_postings=fetched)
     if DEMO:
         result = demo_scout_markdown()
     else:
         with new_agent(api_key) as scout:
-            result = send_with_progress(scout, prompt)
+            result = run_scout_agent(scout, prompt)
+
     scout_path = OUTPUT_DIR / f"jobs-{date.today().isoformat()}.md"
     scout_path.write_text(result, encoding="utf-8")
+    write_scout_json(result, OUTPUT_DIR)
     print(f"\nSaved scout report -> {scout_path}")
     print("\n--- Job Scout: opportunities found ---")
     print(result)
@@ -157,11 +173,21 @@ def match_stage(api_key: str, profile: str, opportunities: list[str]) -> list[tu
         ):
             print("   skipped.")
             continue
+        jd_block = ""
+        url = extract_url_from_opp(opp)
+        if url and not DEMO:
+            try:
+                jd = fetch_job_description(url)
+                jd_block = f"\n\nFull job description (fetched):\n{jd}\n"
+                print(f"   fetched JD ({len(jd)} chars) from {url[:60]}…", flush=True)
+            except Exception as exc:  # noqa: BLE001
+                print(f"   (could not fetch JD: {exc})", flush=True)
+
         prompt = (
             "You are a rigorous skills-match evaluator. Score how well this "
             "candidate fits the opportunity.\n\n"
             f"Candidate profile:\n{profile}\n\n"
-            f"Opportunity:\n{opp}\n\n"
+            f"Opportunity:\n{opp}{jd_block}\n"
             "Return exactly:\n"
             "Fit score: N/100\n"
             "Matched skills: ...\n"
@@ -169,8 +195,11 @@ def match_stage(api_key: str, profile: str, opportunities: list[str]) -> list[tu
             "Verdict: APPLY | MAYBE | SKIP - one-line reason\n"
             "Be honest; do not inflate the score."
         )
-        with new_agent(api_key) as matcher:
-            verdict = matcher.send(prompt).text()
+        if DEMO:
+            verdict = demo_matcher_verdict(opp)
+        else:
+            with new_agent(api_key) as matcher:
+                verdict = matcher.send(prompt).text()
         print(f"\n--- match {i}/{len(opportunities)} ---")
         print(f"{opp}\n")
         print(verdict)
@@ -186,6 +215,11 @@ def rank_stage(api_key: str, profile: str, scored: list[tuple[str, str]]) -> str
         default_yes=True,
     ):
         return ""
+    if DEMO:
+        ranking = demo_ranking(scored)
+        print("\n--- ranker: final shortlist ---")
+        print(ranking)
+        return ranking
     combined = "\n\n".join(f"### {opp}\n{verdict}" for opp, verdict in scored)
     prompt = (
         "You are a hiring strategist for this candidate.\n\n"
@@ -234,8 +268,11 @@ def cover_letter_stage(
             f"Opportunity:\n{opp}\n\n"
             f"Match analysis (matched skills + gaps):\n{verdict}"
         )
-        with new_agent(api_key) as writer:
-            letter = writer.send(prompt).text()
+        if DEMO:
+            letter = demo_cover_letter(opp)
+        else:
+            with new_agent(api_key) as writer:
+                letter = writer.send(prompt).text()
         print(f"\n--- cover letter {i}/{len(picks)}: {short_label(opp)} ---")
         print(letter)
         print("-" * 30)

@@ -1,28 +1,33 @@
 # Job search sources — used by Job Hunter scout stage (merged from job-scout)
 boards:
+  - name: LinkedIn Jobs
+    url: https://www.linkedin.com/jobs
+    priority: 1
+    notes: Highest volume; filter Remote + Recent; use /jobs/view/ URLs in results
+
+  - name: Indeed
+    url: https://www.indeed.com
+    priority: 2
+    notes: Strong for contract and remote; filter Remote + Last 14 days
+
   - name: Interrupt (Memfault Jobs)
     url: https://interrupt.memfault.com/jobs
-    priority: 1
+    priority: 3
     notes: Best niche board for firmware and embedded
 
   - name: Arc.dev — Embedded
     url: https://arc.dev/remote-jobs/embedded
-    priority: 2
+    priority: 4
     notes: Remote embedded; contractor-friendly marketplace
 
   - name: Wellfound (AngelList)
     url: https://wellfound.com
-    priority: 3
+    priority: 5
     notes: Startups — health IoT, robotics, smart home; filter Remote OK
-
-  - name: Remotive
-    url: https://remotive.com/remote-jobs/software-dev
-    priority: 4
-    notes: Curated remote; fewer pure firmware roles
 
   - name: Dice
     url: https://www.dice.com
-    priority: 5
+    priority: 6
     notes: High volume; filter Contract + Remote + Embedded
 
 keywords:
@@ -56,7 +61,8 @@ filters:
   min_fit_score_to_list: 50
 
 search_queries:
+  - "site:linkedin.com/jobs embedded firmware remote United States"
+  - "site:indeed.com embedded firmware IoT remote contract"
   - "remote contract embedded firmware engineer US"
   - "remote IoT firmware ESP32 jobs"
-  - "remote health tech embedded engineer"
   - "site:interrupt.memfault.com firmware OR IoT"

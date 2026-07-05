@@ -1,33 +1,13 @@
 """Fetch a Dice.com job description as plain text.
 
-Usage:
-  python fetch_dice_job.py
-  python fetch_dice_job.py https://www.dice.com/job-detail/...
+Prefer: python -c "from app.fetchers import fetch_job_description; print(fetch_job_description('URL'))"
+This wrapper remains for manual CLI use from workspace/.
 """
-import json
-import re
 import sys
-import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
+from fetchers import fetch_job_description  # noqa: E402
 
 url = sys.argv[1] if len(sys.argv) > 1 else "https://www.dice.com/job-detail/f655b28d-520a-4d68-9df4-671dfe230e0c"
-html = urllib.request.urlopen(url, timeout=20).read().decode("utf-8", "replace")
-match = re.search(r'"description": "(.*?)"\s*,\s*"', html, re.S)
-if not match:
-    print("description not found")
-    raise SystemExit(1)
-
-desc = json.loads('"' + match.group(1) + '"')
-text = (
-    desc.replace("<br />", "\n")
-    .replace("<br/>", "\n")
-    .replace("<strong>", "**")
-    .replace("</strong>", "**")
-    .replace("<b>", "**")
-    .replace("</b>", "**")
-    .replace("<li>", "- ")
-    .replace("</li>", "")
-    .replace("<ul>", "")
-    .replace("</ul>", "")
-    .replace("&amp;", "&")
-)
-print(text)
+print(fetch_job_description(url))

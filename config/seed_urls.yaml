@@ -1,0 +1,18 @@
+# Primary job search seeds — LinkedIn & Indeed first, then specific postings you add.
+# type: search = listing page (agent follows links); type: posting = fetch full JD text.
+seeds:
+  - url: https://www.linkedin.com/jobs/search/?keywords=embedded%20firmware%20iot&location=United%20States&f_WT=2
+    company: LinkedIn
+    type: search
+    note: Remote US embedded firmware / IoT — open individual jobs and use real /jobs/view/ URLs
+
+  - url: https://www.indeed.com/jobs?q=embedded+firmware+iot+remote&l=United+States&sc=0kf%3Aattr(DSQF7)%3B
+    company: Indeed
+    type: search
+    note: Remote embedded firmware — prefer contract/1099; verify each viewjob link
+
+  # Add direct posting URLs below (type: posting) for roles you are actively pursuing:
+  # - url: https://www.linkedin.com/jobs/view/...
+  #   company: Very LLC
+  #   type: posting
+  #   note: Lead Embedded Firmware

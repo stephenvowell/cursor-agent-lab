@@ -17,13 +17,16 @@ Run:  python app/career_copilot.py
 
 from __future__ import annotations
 
+import json
 import os
 import queue
 import subprocess
 import sys
 import threading
 import tkinter as tk
+import webbrowser
 from pathlib import Path
+from tkinter import ttk
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 APP_DIR = PROJECT_ROOT / "app"
@@ -83,6 +86,7 @@ class Copilot(tk.Tk):
         self.out_q: queue.Queue = queue.Queue()
         self.run_buttons: list[tk.Button] = []
         self.current_tool = ""
+        self._roles: list[dict] = []
 
         self._set_icon()
         self._build()
@@ -91,19 +95,23 @@ class Copilot(tk.Tk):
 
     def _set_icon(self) -> None:
         assets = PROJECT_ROOT / "assets"
-        ico, png = assets / "copilot-icon.ico", assets / "copilot-icon.png"
-        try:
-            if ico.exists():
-                self.iconbitmap(default=str(ico))
-                return
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            if png.exists():
-                self._icon_img = tk.PhotoImage(file=str(png))
-                self.iconphoto(True, self._icon_img)
-        except Exception:  # noqa: BLE001
-            pass
+        for ico_name in ("satori-icon.ico", "copilot-icon.ico"):
+            ico = assets / ico_name
+            try:
+                if ico.exists():
+                    self.iconbitmap(default=str(ico))
+                    return
+            except Exception:  # noqa: BLE001
+                pass
+        for png_name in ("satori-icon.png", "copilot-icon.png"):
+            png = assets / png_name
+            try:
+                if png.exists():
+                    self._icon_img = tk.PhotoImage(file=str(png))
+                    self.iconphoto(True, self._icon_img)
+                    return
+            except Exception:  # noqa: BLE001
+                pass
 
     # -- styled widgets ------------------------------------------------------
     def _btn(self, parent, text, command, *, base=ACCENT, hover=ACCENT_H,
@@ -121,6 +129,20 @@ class Copilot(tk.Tk):
     def _build(self) -> None:
         header = tk.Frame(self, bg=BG)
         header.pack(fill="x", padx=22, pady=(18, 4))
+        logo_path = PROJECT_ROOT / "assets" / "satori-icon.png"
+        if not logo_path.is_file():
+            logo_path = PROJECT_ROOT / "assets" / "copilot-icon.png"
+        if logo_path.is_file():
+            try:
+                self._logo_img = tk.PhotoImage(file=str(logo_path))
+                # Downscale for header if rendered large
+                w = self._logo_img.width()
+                if w > 36:
+                    factor = max(1, w // 36)
+                    self._logo_img = self._logo_img.subsample(factor, factor)
+                tk.Label(header, image=self._logo_img, bg=BG).pack(side="left", padx=(0, 10))
+            except Exception:  # noqa: BLE001
+                pass
         tk.Label(header, text="Career Copilot", bg=BG, fg=TEXT,
                  font=(FONT, 22, "bold")).pack(side="left")
         self.status_lbl = tk.Label(header, text="idle", bg=BG, fg=MUTED,
@@ -161,6 +183,67 @@ class Copilot(tk.Tk):
                   base=PANEL, hover=PANEL2, fg=ACCENT_L, font=(FONT, 9),
                   padx=10, pady=6).pack(side="right")
 
+        # roles table (populated when Job Hunter emits @@SCOUT_JSON)
+        roles_wrap = tk.Frame(self, bg=BG)
+        roles_wrap.pack(fill="x", padx=22, pady=(0, 6))
+        tk.Label(
+            roles_wrap, text="Roles", bg=BG, fg=MUTED, font=(FONT, 9, "bold"),
+        ).pack(anchor="w")
+        tree_frame = tk.Frame(roles_wrap, bg=ACCENT)
+        tree_frame.pack(fill="x", pady=(4, 0))
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure(
+            "Roles.Treeview",
+            background=CONSOLE_BG,
+            foreground=TEXT,
+            fieldbackground=CONSOLE_BG,
+            borderwidth=0,
+            rowheight=22,
+        )
+        style.configure(
+            "Roles.Treeview.Heading",
+            background=PANEL2,
+            foreground=ACCENT_L,
+            relief="flat",
+        )
+        style.map("Roles.Treeview", background=[("selected", PANEL2)])
+        self.roles_tree = ttk.Treeview(
+            tree_frame,
+            columns=("fit", "company", "role", "remote", "url"),
+            show="headings",
+            height=4,
+            style="Roles.Treeview",
+        )
+        for col, label, width in (
+            ("fit", "Fit", 44),
+            ("company", "Company", 140),
+            ("role", "Role", 180),
+            ("remote", "Remote", 56),
+            ("url", "URL", 220),
+        ):
+            self.roles_tree.heading(col, text=label)
+            self.roles_tree.column(col, width=width, stretch=(col == "role"))
+        self.roles_tree.pack(side="left", fill="x", expand=True, padx=1, pady=1)
+        r_sb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.roles_tree.yview)
+        r_sb.pack(side="right", fill="y")
+        self.roles_tree.configure(yscrollcommand=r_sb.set)
+
+        role_btns = tk.Frame(roles_wrap, bg=BG)
+        role_btns.pack(fill="x", pady=(6, 0))
+        self._btn(
+            role_btns, "Open URL", self._open_selected_url,
+            base=PANEL, hover=PANEL2, fg=ACCENT_L, font=(FONT, 9), padx=10, pady=5,
+        ).pack(side="left", padx=(0, 6))
+        self._btn(
+            role_btns, "Yes (approve step)", lambda: self._send("y"),
+            base=PANEL, hover=PANEL2, fg=OK, font=(FONT, 9), padx=10, pady=5,
+        ).pack(side="left", padx=(0, 6))
+        self._btn(
+            role_btns, "No (skip step)", lambda: self._send("n"),
+            base=PANEL, hover=PANEL2, fg=DANGER, font=(FONT, 9), padx=10, pady=5,
+        ).pack(side="left")
+
         # console output
         con_wrap = tk.Frame(self, bg=ACCENT)
         con_wrap.pack(fill="both", expand=True, padx=22, pady=(0, 8))
@@ -175,8 +258,8 @@ class Copilot(tk.Tk):
         self.console.configure(yscrollcommand=sb.set)
         self.console.tag_configure("you", foreground=ACCENT_L)
         self.console.tag_configure("sys", foreground=MUTED, font=(MONO, 9, "italic"))
-        self._log("Pick a tool above. Its output shows here; answer prompts in "
-                  "the input row below (or use Yes / No).\n", "sys")
+        self._log("Pick a tool above. Job Hunter fills the Roles table after scout.\n"
+                  "Answer prompts below with Yes / No.\n", "sys")
 
         # input row
         inp = tk.Frame(self, bg=BG)
@@ -206,6 +289,60 @@ class Copilot(tk.Tk):
         tk.Label(chip, text="\u25CF", bg=BG, fg=(OK if ok else DANGER),
                  font=(FONT, 10)).pack(side="left")
         tk.Label(chip, text=f" {label}", bg=BG, fg=MUTED, font=(FONT, 9)).pack(side="left")
+
+    def _clear_roles(self) -> None:
+        for row in self.roles_tree.get_children():
+            self.roles_tree.delete(row)
+        self._roles = []
+
+    def _load_roles(self, json_path: str | Path) -> None:
+        path = Path(json_path)
+        if not path.is_file():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        roles = data.get("roles") or []
+        self._clear_roles()
+        self._roles = roles
+        for role in roles:
+            self.roles_tree.insert(
+                "",
+                "end",
+                values=(
+                    role.get("fit", ""),
+                    role.get("company", ""),
+                    role.get("role", ""),
+                    role.get("remote", ""),
+                    role.get("url", ""),
+                ),
+            )
+        self._log(f"\n[Loaded {len(roles)} role(s) into table]\n", "sys")
+
+    def _open_selected_url(self) -> None:
+        sel = self.roles_tree.selection()
+        if not sel:
+            self._log("\n[Select a role row first]\n", "sys")
+            return
+        vals = self.roles_tree.item(sel[0], "values")
+        url = vals[4] if len(vals) > 4 else ""
+        if url.startswith("http"):
+            webbrowser.open(url)
+            self._log(f"\n[Opened {url}]\n", "sys")
+        else:
+            self._log("\n[No URL in selected row]\n", "sys")
+
+    def _filter_gui_lines(self, text: str) -> str:
+        """Strip @@SCOUT_JSON bridge lines from console; load table instead."""
+        out: list[str] = []
+        for line in text.splitlines(keepends=True):
+            if line.startswith("@@SCOUT_JSON "):
+                path = line.strip().split(" ", 1)[1]
+                self.after(0, lambda p=path: self._load_roles(p))
+            else:
+                out.append(line)
+        return "".join(out)
 
     # -- console helpers -----------------------------------------------------
     def _log(self, text: str, tag: str | None = None) -> None:
@@ -245,10 +382,12 @@ class Copilot(tk.Tk):
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"
         env["PYTHONUTF8"] = "1"
+        env["COPILOT_GUI"] = "1"
         cmd = [python_exe(), "-u", str(APP_DIR / script), *args]
         no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
         self._clear()
+        self._clear_roles()
         self.current_tool = script
         self._log(f"$ {' '.join([Path(cmd[0]).name, *cmd[1:]])}\n\n", "sys")
         try:
@@ -292,7 +431,7 @@ class Copilot(tk.Tk):
         except queue.Empty:
             pass
         if chunks:
-            self._log("".join(chunks))
+            self._log(self._filter_gui_lines("".join(chunks)))
         if done_code is not None:
             self._log(f"\n\n[{self.current_tool} finished, exit code {done_code}]\n", "sys")
             self.proc = None
