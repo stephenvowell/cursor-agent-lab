@@ -81,7 +81,19 @@ def main() -> int:
             format="ICO",
             sizes=[(256, 256), (48, 48), (32, 32), (16, 16)],
         )
-    print(f"Wrote {PNG.name}, {ICO.name} (+ copilot-icon aliases)")
+
+    # Header variant: light tint on transparent bg for dark UI
+    header = square.resize((40, 40), Image.Resampling.LANCZOS).convert("RGBA")
+    accent = (147, 197, 253)
+    px = header.load()
+    for y in range(header.height):
+        for x in range(header.width):
+            r, g, b, a = px[x, y]
+            if a > 24 and (r + g + b) < 420:
+                px[x, y] = (*accent, a)
+    header.save(ASSETS / "satori-header.png", format="PNG")
+
+    print(f"Wrote {PNG.name}, {ICO.name}, satori-header.png (+ copilot-icon aliases)")
     return 0
 
 

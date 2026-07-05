@@ -12,6 +12,8 @@
 
 *Career Copilot: one window that runs the toolkit's agents in an approval-gated, embedded console — no popup terminals. Styled to match [stephenv.net](https://stephenv.net).*
 
+**Sell it:** see [docs/PRODUCT.md](docs/PRODUCT.md) (pricing, retail build, license keys) and [docs/PRIVACY.md](docs/PRIVACY.md).
+
 ## What this demonstrates
 
 A compact but complete showcase of the skills behind agent-driven workflow automation:

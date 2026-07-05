@@ -1,16 +1,3 @@
-# Secrets — never commit
-.env
-
-# Gmail API credentials & saved login — never commit
-credentials.json
-token.json
-
-# Agent sandbox output
-workspace/output/
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-venv/
+# Retail build output
+bin/
+build/career-copilot/

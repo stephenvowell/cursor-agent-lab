@@ -28,7 +28,14 @@ import webbrowser
 from pathlib import Path
 from tkinter import ttk
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from license import is_licensed, license_status_label  # noqa: E402
+from paths import resolve_project_root, resolve_python_exe  # noqa: E402
+from setup_wizard import needs_setup, run_setup_wizard  # noqa: E402
+
+PROJECT_ROOT = resolve_project_root()
 APP_DIR = PROJECT_ROOT / "app"
 VENV_PY = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
 
@@ -52,17 +59,67 @@ MONO = "Consolas"
 _DONE = object()  # sentinel pushed on the queue when a tool exits
 
 
+def assets_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        bundle = getattr(sys, "_MEIPASS", None)
+        if bundle and (Path(bundle) / "assets").is_dir():
+            return Path(bundle) / "assets"
+    return PROJECT_ROOT / "assets"
+
+
+def _header_logo_photo(master: tk.Misc, *, height: int = 40) -> tk.PhotoImage | None:
+    """Satori mark tinted light for dark header (black SVG is invisible on navy)."""
+    assets = assets_dir()
+    for name in ("satori-header.png", "satori-icon.png", "copilot-icon.png"):
+        path = assets / name
+        if not path.is_file():
+            continue
+        if name == "satori-header.png":
+            try:
+                return tk.PhotoImage(master=master, file=str(path))
+            except tk.TclError:
+                continue
+        try:
+            from PIL import Image, ImageTk
+
+            img = Image.open(path).convert("RGBA")
+            accent = (147, 197, 253)  # ACCENT_L
+            px = img.load()
+            w, h = img.size
+            for y in range(h):
+                for x in range(w):
+                    r, g, b, a = px[x, y]
+                    if a > 24 and (r + g + b) < 420:
+                        px[x, y] = (*accent, a)
+            new_w = max(1, int(w * height / h))
+            img = img.resize((new_w, height), Image.Resampling.LANCZOS)
+            return ImageTk.PhotoImage(img, master=master)
+        except Exception:  # noqa: BLE001
+            try:
+                img = tk.PhotoImage(master=master, file=str(path))
+                if img.height() > height:
+                    f = max(1, img.height() // height)
+                    return img.subsample(f, f)
+                return img
+            except tk.TclError:
+                continue
+    return None
+
+
 def python_exe() -> str:
-    return str(VENV_PY) if VENV_PY.exists() else sys.executable
+    return resolve_python_exe(PROJECT_ROOT)
 
 
 def has_api_key() -> bool:
     if (os.environ.get("CURSOR_API_KEY") or "").strip():
         return True
     try:
-        for line in (PROJECT_ROOT / ".env").read_text(encoding="utf-8").splitlines():
+        env = PROJECT_ROOT / ".env"
+        if not env.is_file():
+            return False
+        for line in env.read_text(encoding="utf-8").splitlines():
             if line.strip().startswith("CURSOR_API_KEY="):
-                val = line.split("=", 1)[1].strip()
+                val = line.split("=", 1)[1].strip().strip('"').strip("'")
                 return val not in ("", "cursor_your_key_here")
     except OSError:
         pass
@@ -94,7 +151,7 @@ class Copilot(tk.Tk):
         self.after(50, self._drain_queue)
 
     def _set_icon(self) -> None:
-        assets = PROJECT_ROOT / "assets"
+        assets = assets_dir()
         for ico_name in ("satori-icon.ico", "copilot-icon.ico"):
             ico = assets / ico_name
             try:
@@ -129,22 +186,18 @@ class Copilot(tk.Tk):
     def _build(self) -> None:
         header = tk.Frame(self, bg=BG)
         header.pack(fill="x", padx=22, pady=(18, 4))
-        logo_path = PROJECT_ROOT / "assets" / "satori-icon.png"
-        if not logo_path.is_file():
-            logo_path = PROJECT_ROOT / "assets" / "copilot-icon.png"
-        if logo_path.is_file():
-            try:
-                self._logo_img = tk.PhotoImage(file=str(logo_path))
-                # Downscale for header if rendered large
-                w = self._logo_img.width()
-                if w > 36:
-                    factor = max(1, w // 36)
-                    self._logo_img = self._logo_img.subsample(factor, factor)
-                tk.Label(header, image=self._logo_img, bg=BG).pack(side="left", padx=(0, 10))
-            except Exception:  # noqa: BLE001
-                pass
-        tk.Label(header, text="Career Copilot", bg=BG, fg=TEXT,
-                 font=(FONT, 22, "bold")).pack(side="left")
+
+        title_row = tk.Frame(header, bg=BG)
+        title_row.pack(side="left")
+
+        self._logo_img = _header_logo_photo(self, height=40)
+        if self._logo_img is not None:
+            tk.Label(title_row, image=self._logo_img, bg=BG).pack(side="left", padx=(0, 12))
+
+        tk.Label(
+            title_row, text="Career Copilot", bg=BG, fg=TEXT, font=(FONT, 22, "bold"),
+        ).pack(side="left")
+
         self.status_lbl = tk.Label(header, text="idle", bg=BG, fg=MUTED,
                                     font=(FONT, 10, "italic"))
         self.status_lbl.pack(side="right")
@@ -152,6 +205,7 @@ class Copilot(tk.Tk):
         status = tk.Frame(self, bg=BG)
         status.pack(fill="x", padx=22, pady=(0, 8))
         self._chip(status, "API key", has_api_key())
+        self._chip(status, "License", is_licensed(PROJECT_ROOT))
         self._chip(status, "Gmail", has_gmail_creds())
         self._chip(status, "venv", VENV_PY.exists())
 
@@ -182,6 +236,10 @@ class Copilot(tk.Tk):
                   lambda: self._start_tool("job_email_checker.py", False, ("--auth",)),
                   base=PANEL, hover=PANEL2, fg=ACCENT_L, font=(FONT, 9),
                   padx=10, pady=6).pack(side="right")
+        self._btn(tools, "Setup",
+                  self._open_setup,
+                  base=PANEL, hover=PANEL2, fg=ACCENT_L, font=(FONT, 9),
+                  padx=10, pady=6).pack(side="right", padx=(0, 6))
 
         # roles table (populated when Job Hunter emits @@SCOUT_JSON)
         roles_wrap = tk.Frame(self, bg=BG)
@@ -370,7 +428,14 @@ class Copilot(tk.Tk):
         if running:
             self.entry.focus_set()
 
+    def _open_setup(self) -> None:
+        run_setup_wizard(self, PROJECT_ROOT)
+
     def _start_tool(self, script: str, agent: bool, extra: tuple[str, ...] = ()) -> None:
+        if getattr(sys, "frozen", False) and not is_licensed(PROJECT_ROOT):
+            self._log("\n[Activate a license in Setup before running tools]\n", "sys")
+            self._open_setup()
+            return
         if self.proc is not None:
             self._log("\n[a tool is already running - Stop it first]\n", "sys")
             return
@@ -464,6 +529,12 @@ class Copilot(tk.Tk):
 
 def main() -> None:
     app = Copilot()
+    if needs_setup(PROJECT_ROOT):
+        app.withdraw()
+        if not run_setup_wizard(app, PROJECT_ROOT):
+            app.destroy()
+            return
+        app.deiconify()
     if "--demo" in sys.argv:
         app.demo.set(True)
         extra: tuple[str, ...] = ("--unattended",) if "--unattended" in sys.argv else ()
