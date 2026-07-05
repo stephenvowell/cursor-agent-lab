@@ -1,18 +1,18 @@
-"""Job hunter - a web-search scout that feeds a skills-matching agent team.
+"""Job hunter — Job Scout + skills matchers + ranker + cover letters.
 
-Flow (every step gated by `approve()` - nothing autonomous):
+Flow (every step gated by `approve()` — you only say yes/no in Career Copilot):
 
-  1. SCOUT   agent  -> searches the web for CURRENT openings that match your
-                       criteria (full-time / part-time / remote)
-  2. MATCHER agents -> one per opportunity, scores fit against YOUR skill set
-                       (matched skills, gaps, APPLY / MAYBE / SKIP)
-  3. RANKER  agent  -> ranks the matches, recommends the top picks
+  1. JOB SCOUT  -> live web search (Interrupt, Arc, Wellfound, …) + fit table
+  2. MATCHER    -> one per opportunity, scores fit against your résumé
+  3. RANKER     -> ranks matches, recommends top picks
+  4. COVER      -> tailored letters for top roles (optional)
 
-Your skill profile is read from workspace/output/resume-and-cover-letter.md
-when present; otherwise a built-in fallback is used.
+Profile: workspace/output/resume-and-cover-letter.md (fallback if missing).
+Scout report: workspace/output/jobs-YYYY-MM-DD.md
 
 Run:  python app/job_hunter.py
-      python app/job_hunter.py --demo     (offline, no key, no cost)
+      python app/job_hunter.py --demo
+      python app/job_hunter.py --unattended
 """
 
 from __future__ import annotations
@@ -23,7 +23,16 @@ import sys
 from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from job_scout import (  # noqa: E402
+    DEFAULT_FOCUS,
+    DEFAULT_TYPES,
+    build_scout_prompt,
+    demo_scout_markdown,
+    parse_opportunities,
+    send_with_progress,
+)
 from shared import (  # noqa: E402
     MODEL,
     OUTPUT_DIR,
@@ -32,9 +41,12 @@ from shared import (  # noqa: E402
     approve,
     ask_text,
     banner,
+    configure_utf8_stdio,
     demo_enabled,
+    notify_desktop,
     require_api_key,
     save_output,
+    unattended_enabled,
 )
 
 from cursor_sdk import Agent, CursorAgentError, LocalAgentOptions  # noqa: E402
@@ -87,15 +99,30 @@ def load_profile() -> str:
     return text.strip()
 
 
-def parse_opportunities(text: str) -> list[str]:
-    """Pull '1. ...' / '- ...' style lines out of the scout's answer."""
-    found: list[str] = []
-    for line in text.splitlines():
-        line = line.strip()
-        m = re.match(r"^(?:\d+[.)]|[-*])\s+(.*)", line)
-        if m and m.group(1).strip():
-            found.append(m.group(1).strip())
-    return found
+def scout_stage(api_key: str, profile: str, types: str, focus: str) -> list[str]:
+    """Job Scout — live web search; you approve before it runs."""
+    if not approve(
+        "Send Job Scout to search live job boards (Interrupt, Arc, Wellfound, …)?",
+        default_yes=True,
+    ):
+        print("Cancelled.")
+        return []
+    prompt = build_scout_prompt(profile, types, focus)
+    if DEMO:
+        result = demo_scout_markdown()
+    else:
+        with new_agent(api_key) as scout:
+            result = send_with_progress(scout, prompt)
+    scout_path = OUTPUT_DIR / f"jobs-{date.today().isoformat()}.md"
+    scout_path.write_text(result, encoding="utf-8")
+    print(f"\nSaved scout report -> {scout_path}")
+    print("\n--- Job Scout: opportunities found ---")
+    print(result)
+    print("--------------------------------------")
+    opps = parse_opportunities(result)
+    if not opps:
+        print("(No parseable rows in scout output — review report above.)")
+    return opps
 
 
 def short_label(opp: str) -> str:
@@ -114,32 +141,6 @@ def parse_score(verdict: str) -> int:
 def slugify(text: str, limit: int = 40) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return (slug[:limit] or "role").rstrip("-")
-
-
-def scout_stage(api_key: str, profile: str, types: str, focus: str) -> list[str]:
-    """SCOUT searches the web for openings; you approve before it runs."""
-    if not approve("Send the SCOUT agent to search the web for openings?", default_yes=True):
-        print("Cancelled.")
-        return []
-    prompt = (
-        "You are a job-search scout WITH LIVE WEB ACCESS. Use web search now to "
-        "find CURRENT, real, active job openings for this candidate.\n\n"
-        f"Candidate profile:\n{profile}\n\n"
-        f"Preferred employment types: {types}\n"
-        f"Preferred roles / focus: {focus}\n"
-        "Location: candidate is in Sierra Vista, AZ, USA and is open to REMOTE.\n\n"
-        "Return 5-8 openings, ONE per line, numbered, in EXACTLY this format:\n"
-        "N. Company | Role title | Type (full-time/part-time/remote) | "
-        "Location or Remote | URL | one-line why it fits\n\n"
-        "Only include real postings you can find via web search. If you cannot "
-        "verify a posting's link, omit that row rather than inventing one."
-    )
-    with new_agent(api_key) as scout:
-        result = scout.send(prompt).text()
-    print("\n--- scout: opportunities found ---")
-    print(result)
-    print("----------------------------------")
-    return parse_opportunities(result)
 
 
 def match_stage(api_key: str, profile: str, opportunities: list[str]) -> list[tuple[str, str]]:
@@ -274,21 +275,29 @@ def build_report(types: str, focus: str, scored: list[tuple[str, str]], ranking:
 
 
 def main() -> None:
-    banner("Job Hunter: web-search scout -> skills matchers -> ranker"
-           + ("  [DEMO]" if DEMO else ""))
-    print("Scout -> Matchers -> Ranker. You approve every step.\n")
+    configure_utf8_stdio()
+    unattended = unattended_enabled()
+    banner(
+        "Job Hunter: Job Scout -> matchers -> ranker -> cover letters"
+        + ("  [DEMO]" if DEMO else "")
+        + ("  [UNATTENDED]" if unattended else "")
+    )
+    print(
+        "Job Scout -> Matchers -> Ranker."
+        + (" Auto-approving every step.\n" if unattended else " You approve every step (yes/no).\n")
+    )
     api_key = "demo" if DEMO else require_api_key()
 
     profile = load_profile()
 
     types = ask_text(
         "Employment types to target?\n"
-        "(default: full-time, part-time, or remote)\n> "
-    ) or "full-time, part-time, or remote"
+        f"(default: {DEFAULT_TYPES})\n> "
+    ) or DEFAULT_TYPES
     focus = ask_text(
         "Role focus / keywords?\n"
-        "(default: software / embedded / firmware / IoT / backend)\n> "
-    ) or "software engineer, embedded/firmware, IoT, Python/C++, backend/Node.js"
+        f"(default: {DEFAULT_FOCUS})\n> "
+    ) or DEFAULT_FOCUS
 
     try:
         opportunities = scout_stage(api_key, profile, types, focus)
@@ -302,11 +311,29 @@ def main() -> None:
         ranking = rank_stage(api_key, profile, scored)
         cover_letter_stage(api_key, profile, scored)
 
-        if approve("Save the full report?", default_yes=True):
+        report_path = None
+        if unattended or approve("Save the full report?", default_yes=True):
             report = build_report(types, focus, scored, ranking)
-            path = save_output(f"job-opportunities-{date.today().isoformat()}.md", report)
-            print(f"\nSaved -> {path}")
+            report_path = save_output(
+                f"job-opportunities-{date.today().isoformat()}.md", report
+            )
+            print(f"\nSaved -> {report_path}")
         print(f"\nDone. Reports live in {WORKSPACE / 'output'}.")
+
+        if unattended and report_path:
+            ranked = sorted(scored, key=lambda pair: parse_score(pair[1]), reverse=True)
+            top = ranked[:3]
+            lines = [
+                f"Job Hunter finished — {len(scored)} role(s) scored.",
+                "",
+                "Top picks:",
+            ]
+            for i, (opp, verdict) in enumerate(top, start=1):
+                score = parse_score(verdict)
+                lines.append(f"  {i}. {short_label(opp)} ({score}/100)")
+            lines.append("")
+            lines.append("Full report opened in your editor.")
+            notify_desktop("Job Hunter — morning run", "\n".join(lines), open_path=report_path)
 
     except CursorAgentError as err:
         print(

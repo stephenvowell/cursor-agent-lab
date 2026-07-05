@@ -1,0 +1,5 @@
+- [ ] **Set up the lab** — Install deps (`pip install -r requirements.txt`), add `CURSOR_API_KEY` to `.env`, and skim the [Python SDK docs](https://cursor.com/docs/sdk/python) (core concepts: `Agent`, `Run`, local vs cloud runtime).
+- [ ] **Run Lesson 1** — Execute `lessons/01_one_shot.py` (or `--demo`) to learn the simplest pattern: `Agent.prompt(...)` for a single fire-and-forget task.
+- [ ] **Run Lessons 2–3** — Execute `02_streaming_followup.py` then `03_human_in_the_loop.py` to learn durable agents (`Agent.create` / `agent.send`), streaming events, and the `approve()` gate pattern.
+- [ ] **Run Lesson 4 + capstone** — Execute `04_multi_agent_orchestration.py` then `app/task_assistant.py` to see planner → worker → reviewer coordination with human approval throughout.
+- [ ] **Build one small custom agent** — Write a short script in `workspace/` that uses a durable local agent with a custom prompt and at least one follow-up turn, reusing patterns from `shared/` (sandboxed `cwd`, approval gate).

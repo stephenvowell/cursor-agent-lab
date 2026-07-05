@@ -1,0 +1,62 @@
+# Job search sources — used by Job Hunter scout stage (merged from job-scout)
+boards:
+  - name: Interrupt (Memfault Jobs)
+    url: https://interrupt.memfault.com/jobs
+    priority: 1
+    notes: Best niche board for firmware and embedded
+
+  - name: Arc.dev — Embedded
+    url: https://arc.dev/remote-jobs/embedded
+    priority: 2
+    notes: Remote embedded; contractor-friendly marketplace
+
+  - name: Wellfound (AngelList)
+    url: https://wellfound.com
+    priority: 3
+    notes: Startups — health IoT, robotics, smart home; filter Remote OK
+
+  - name: Remotive
+    url: https://remotive.com/remote-jobs/software-dev
+    priority: 4
+    notes: Curated remote; fewer pure firmware roles
+
+  - name: Dice
+    url: https://www.dice.com
+    priority: 5
+    notes: High volume; filter Contract + Remote + Embedded
+
+keywords:
+  primary:
+    - embedded
+    - firmware
+    - IoT
+    - ESP32
+    - RTOS
+    - connectivity
+    - wearable
+    - health tech
+    - medical device
+    - edge
+    - sensor
+    - BLE
+    - MQTT
+  secondary:
+    - platform engineer
+    - solutions engineer
+    - contract
+    - remote
+
+filters:
+  location: United States
+  remote: true
+  employment_types:
+    - contract
+    - full-time
+    - part-time
+  min_fit_score_to_list: 50
+
+search_queries:
+  - "remote contract embedded firmware engineer US"
+  - "remote IoT firmware ESP32 jobs"
+  - "remote health tech embedded engineer"
+  - "site:interrupt.memfault.com firmware OR IoT"

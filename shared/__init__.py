@@ -11,22 +11,22 @@ import os
 import sys
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+WORKSPACE = PROJECT_ROOT / "workspace"      # agents run against this sandbox
+OUTPUT_DIR = WORKSPACE / "output"           # approved drafts land here
+
 # Load CURSOR_API_KEY (and friends) from a local .env if python-dotenv is
 # installed. Harmless if it isn't.
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    load_dotenv(PROJECT_ROOT / ".env")
 except ImportError:  # pragma: no cover
     pass
 
 # Model used across the lab. "composer-2.5" is a sensible default; "auto"
 # lets the server choose. Model is REQUIRED for local agents.
 MODEL = os.environ.get("CURSOR_LAB_MODEL", "composer-2.5").strip() or "composer-2.5"
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-WORKSPACE = PROJECT_ROOT / "workspace"      # agents run against this sandbox
-OUTPUT_DIR = WORKSPACE / "output"           # approved drafts land here
 
 
 def require_api_key() -> str:
@@ -59,8 +59,12 @@ def approve(action: str, *, default_yes: bool = False) -> bool:
     """The heart of 'not autonomous': ask before doing anything.
 
     Prints what is about to happen and returns True only if you approve.
-    Answering nothing uses `default_yes`.
+    Answering nothing uses `default_yes`. In unattended mode (--unattended),
+    every step auto-approves so Task Scheduler can run without a keyboard.
     """
+    if unattended_enabled():
+        print(f"\n>> {action}\n   [unattended: yes]")
+        return True
     suffix = "[Y/n]" if default_yes else "[y/N]"
     try:
         answer = input(f"\n>> {action}\n   Proceed? {suffix} ").strip().lower()
@@ -73,6 +77,8 @@ def approve(action: str, *, default_yes: bool = False) -> bool:
 
 def ask_text(prompt: str) -> str:
     """Prompt the human for a line of text (empty allowed)."""
+    if unattended_enabled():
+        return ""
     try:
         return input(prompt).strip()
     except EOFError:
@@ -119,6 +125,45 @@ def demo_enabled() -> bool:
     if "--demo" in sys.argv:
         return True
     return os.environ.get("CURSOR_LAB_DEMO", "").strip().lower() in ("1", "true", "yes")
+
+
+def unattended_enabled() -> bool:
+    """True when --unattended or CURSOR_LAB_UNATTENDED=1 (Task Scheduler runs)."""
+    if "--unattended" in sys.argv:
+        return True
+    return os.environ.get("CURSOR_LAB_UNATTENDED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def configure_utf8_stdio() -> None:
+    """Avoid UnicodeEncodeError on Windows consoles during agent output."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def notify_desktop(title: str, body: str, *, open_path: Path | None = None) -> None:
+    """Blocking Windows message box (system-modal) plus optional open-in-editor."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        flags = 0x40 | 0x10000 | 0x40000 | 0x1000  # INFO | FOREGROUND | TOPMOST | SYSTEMMODAL
+        ctypes.windll.user32.MessageBoxW(0, body, title, flags)
+    except Exception:  # noqa: BLE001
+        pass
+    if open_path and open_path.exists():
+        try:
+            os.startfile(open_path)  # noqa: S606 — Windows only
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _canned_reply(prompt: str) -> str:

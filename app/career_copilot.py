@@ -4,7 +4,7 @@ One window that runs the three tools in this repo AND keeps all their output
 (and your yes/no answers) inside an embedded console - no popup terminals:
 
   * Email Check   -> app/job_email_checker.py   (scan Gmail for job replies)
-  * Job Hunter    -> app/job_hunter.py          (find + score roles, draft letters)
+  * Job Hunter    -> app/job_hunter.py          (Job Scout + score + rank + letters)
   * Task Assistant-> app/task_assistant.py      (plan + draft your day)
 
 The tools are interactive (they ask you to approve every agent step). This app
@@ -139,7 +139,7 @@ class Copilot(tk.Tk):
         for emoji, label, script, agent, extra in (
             # --no-popup keeps the email summary in the console, not a dialog.
             ("\U0001F4E7", "Email Check", "job_email_checker.py", False, ("--no-popup",)),
-            ("\U0001F3AF", "Job Hunter", "job_hunter.py", True, ()),
+            ("\U0001F3AF", "Job Scout + Hunter", "job_hunter.py", True, ()),
             ("\U0001F5D3", "Task Assistant", "task_assistant.py", True, ()),
         ):
             b = self._btn(

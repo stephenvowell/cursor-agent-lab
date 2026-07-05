@@ -30,6 +30,10 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from shared import notify_desktop  # noqa: E402
+
 def app_base_dir() -> Path:
     """Where the tool keeps its files.
 
@@ -268,23 +272,13 @@ def build_popup_text(messages: list[dict], days: int) -> str:
     return "\n".join(lines)
 
 
-def show_popup(messages: list[dict], days: int) -> None:
-    """Show a native Windows popup with the summary. No-op off Windows."""
-    if os.name != "nt":
-        return
-    try:
-        import ctypes
-
-        title = "Job inbox check"
-        body = build_popup_text(messages, days)
-        MB_ICONINFORMATION = 0x40
-        MB_SETFOREGROUND = 0x10000
-        MB_TOPMOST = 0x40000
-        ctypes.windll.user32.MessageBoxW(
-            0, body, title, MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST
-        )
-    except Exception:
-        pass  # a failed popup should never break the run
+def show_popup(messages: list[dict], days: int, *, open_path: Path | None = None) -> None:
+    """Blocking system-modal summary; optionally opens the saved markdown file."""
+    title = "Job inbox check — morning summary"
+    body = build_popup_text(messages, days)
+    if open_path:
+        body += f"\n\n(Summary file: {open_path.name})"
+    notify_desktop(title, body, open_path=open_path)
 
 
 def main() -> None:
@@ -328,7 +322,7 @@ def main() -> None:
     print(f"\nSaved -> {out_path}")
 
     if not args.no_popup:
-        show_popup(messages, args.days)
+        show_popup(messages, args.days, open_path=out_path)
 
 
 if __name__ == "__main__":

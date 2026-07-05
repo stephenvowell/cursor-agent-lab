@@ -47,12 +47,13 @@ Then the capstones:
   You give it a goal; a *planner* agent proposes tasks (you approve/edit),
   *worker* agents draft each one (you approve, optionally save), and a
   *reviewer* agent wraps up. Multiple agents, human-in-the-loop throughout.
-- `app/job_hunter.py` — a **web-search job hunter**. A *scout* agent searches
-  the live web for openings (full-time / part-time / remote), *matcher* agents
-  score each one against your skill set (APPLY/MAYBE/SKIP), a *ranker* agent
-  shortlists the best, and a *writer* agent drafts tailored cover letters for
-  the top picks — you approve every step. Reads your skill profile from
-  `workspace/output/resume-and-cover-letter.md` when present.
+- `app/job_hunter.py` — **Job Scout + hunter pipeline**. *Job Scout* searches live
+  boards (Interrupt, Arc, Wellfound, …) and returns a scored markdown table;
+  *matcher* agents score each role against your résumé (APPLY/MAYBE/SKIP), a
+  *ranker* shortlists the best, and a *writer* drafts cover letters — you
+  approve every step (yes/no in Career Copilot). Profile:
+  `workspace/output/resume-and-cover-letter.md`. Scout report:
+  `workspace/output/jobs-YYYY-MM-DD.md`.
 
 ## Prerequisites
 
