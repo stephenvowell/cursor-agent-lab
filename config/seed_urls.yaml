@@ -1,4 +1,4 @@
-# Primary job search seeds — LinkedIn & Indeed first, then specific postings you add.
+# Primary job search seeds — LinkedIn & Indeed searches, then direct postings you pursue.
 # type: search = listing page (agent follows links); type: posting = fetch full JD text.
 seeds:
   - url: https://www.linkedin.com/jobs/search/?keywords=embedded%20firmware%20iot&location=United%20States&f_WT=2
@@ -11,8 +11,12 @@ seeds:
     type: search
     note: Remote embedded firmware — prefer contract/1099; verify each viewjob link
 
-  # Add direct posting URLs below (type: posting) for roles you are actively pursuing:
-  # - url: https://www.linkedin.com/jobs/view/...
-  #   company: Very LLC
-  #   type: posting
-  #   note: Lead Embedded Firmware
+  - url: https://veryllcfc.applytojob.com/apply/783eoBQliX/Lead-Embedded-Firmware-Engineer-Contract-1099
+    company: Very LLC
+    type: posting
+    note: Lead Embedded Firmware Engineer — Contract 1099 ~$100/hr; top apply target
+
+  - url: https://veryllcfc.applytojob.com/apply/LnwjDgrQTh/Lead-Embedded-Firmware-Engineer-Matter-Contractor
+    company: Very LLC
+    type: posting
+    note: Lead Embedded Firmware Engineer — Matter contractor variant
